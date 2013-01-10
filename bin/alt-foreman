@@ -1,9 +1,25 @@
 #!/usr/bin/ruby
 
 require 'alt-foreman'
+require 'alt-foreman/version'
 require 'alt-foreman/process'
 
-Dir.chdir(File.dirname(ARGV[0]))
+
+pf = ARGV[0] || "Procfile"
+is_fail = !File.exist?(pf)
+is_help = ARGV.include?('-h') or ARGV.include?("--help")
+
+if is_help or is_fail
+  unless is_help
+    puts "No such file `#{ARGV[0]}'"
+  end
+  puts "alt-foreman #{Alt::Foreman::VERSION}"
+  puts "Crude alternative to foreman for local development"
+  puts "Usage: alt-foreman [/path/to/Procfile]"
+  exit(is_help ? 0 : 1)
+end
+
+Dir.chdir(File.dirname(ARGV[0] || 'Procfile'))
 
 if File.exist?('Gemfile')
   ENV["BUNDLE_GEMFILE"]= File.expand_path("Gemfile")
@@ -11,14 +27,21 @@ end
 
 processes = IO.readlines(ARGV[0]).map do |line|
   line = line.chomp.gsub(/#.*$/, '')
-  if line =~ /:/
-    Alt::Foreman::Process.new(*line.split(/:/,2))
+  if line =~ /:\s+/
+    Alt::Foreman::Process.new(*line.split(/:\s+/,2))
   else
     nil
   end
 end.compact
 
 threads = processes.map do |process|
-  Thread.new { process.run }
+  Thread.new do
+    loop do
+      process.run
+      process.log("Process #{$?.pid} `#{process.cmd}' died (#{$?.status})", :red)
+      sleep 2
+      process.log("`#{process.cmd}' re-spawning", :red)
+    end
+  end
 end.each { |t| t.join }
 
