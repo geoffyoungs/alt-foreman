@@ -3,7 +3,7 @@ require 'shellwords'
 module Alt
   module Foreman
     class Process
-      attr_reader :name, :cmd
+      attr_reader :name, :cmd, :pid
       def initialize(name, cmd)
         @name, @cmd = name, cmd
       end
@@ -21,6 +21,7 @@ module Alt
         end
 
         IO.popen(@cmd, 'rb') do |io|
+          @pid = io.pid
           while line = io.gets
             log(line)
           end
